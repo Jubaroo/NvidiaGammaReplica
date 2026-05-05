@@ -1,5 +1,26 @@
+# .gitignore for .NET / Visual Studio / JetBrains Rider
+
+## Ignore Visual Studio / Rider / VS Code files
+.vs/
+.idea/
+*.user
+*.userosscache
+*.sln.docattachments
+.vscode/
+
+## Ignore Build Folders
 bin/
 obj/
-/packages/
+
+## Ignore NuGet Packages
+packages/
+*.nupkg
+
+## Ignore OS-specific files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+## Project-specific ignores
 riderModule.iml
 /_ReSharper.Caches/
