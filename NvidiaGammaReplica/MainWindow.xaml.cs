@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using NvidiaGammaReplica.Models;
 using NvidiaGammaReplica.Services;
@@ -26,6 +27,8 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _saveTimer;
 
     private HotkeyManager? _hotkeys;
+    private Controls.OsdWindow? _osdWindow;
+    private readonly List<Controls.IdentifyWindow> _activeIdentifyWindows = new();
 
     private const int HotkeyIdUp = 1;
     private const int HotkeyIdDown = 2;
@@ -84,15 +87,18 @@ public partial class MainWindow : Window
         switch (id)
         {
             case HotkeyIdUp:
+                StopSliderAnimations();
                 GammaSlider.Value = Math.Min(GammaSlider.Maximum, GammaSlider.Value + 0.05);
+                ShowOsd(GammaSlider.Value);
                 break;
             case HotkeyIdDown:
+                StopSliderAnimations();
                 GammaSlider.Value = Math.Max(GammaSlider.Minimum, GammaSlider.Value - 0.05);
+                ShowOsd(GammaSlider.Value);
                 break;
             case HotkeyIdReset:
                 ApplySettingsToUi(GammaSettings.Default());
-                ApplyCurrentToHardware();
-                ScheduleSave();
+                ShowOsd(1.00);
                 break;
         }
     }
@@ -108,10 +114,18 @@ public partial class MainWindow : Window
             Hide();
         }
     }
-
     private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (_shuttingDown) return;
+        if (_shuttingDown)
+        {
+            _osdWindow?.Close();
+            foreach (var w in _activeIdentifyWindows)
+            {
+                try { w.Close(); } catch { }
+            }
+            _activeIdentifyWindows.Clear();
+            return;
+        }
         e.Cancel = true;
         Hide();
     }
@@ -216,24 +230,59 @@ public partial class MainWindow : Window
         UpdateValueLabels(s);
         CurvePreview.Update(s);
         _isUpdating = false;
+        UpdateActivePresetHighlight();
+    }
+
+    private void StopSliderAnimations()
+    {
+        GammaSlider.BeginAnimation(Slider.ValueProperty, null);
+        RedSlider.BeginAnimation(Slider.ValueProperty, null);
+        GreenSlider.BeginAnimation(Slider.ValueProperty, null);
+        BlueSlider.BeginAnimation(Slider.ValueProperty, null);
+        BrightnessSlider.BeginAnimation(Slider.ValueProperty, null);
+        ContrastSlider.BeginAnimation(Slider.ValueProperty, null);
+    }
+
+    private void AnimateSliderTo(Slider slider, double targetValue, Action? onCompleted = null)
+    {
+        var anim = new DoubleAnimation
+        {
+            To = targetValue,
+            Duration = TimeSpan.FromMilliseconds(250),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        anim.Completed += (s, e) =>
+        {
+            slider.BeginAnimation(Slider.ValueProperty, null);
+            slider.Value = targetValue;
+            onCompleted?.Invoke();
+        };
+        slider.BeginAnimation(Slider.ValueProperty, anim);
     }
 
     private void ApplySettingsToUi(GammaSettings s)
     {
-        _isUpdating = true;
-        GammaSlider.Value = s.Master;
-        RedSlider.Value = s.RedOffset;
-        GreenSlider.Value = s.GreenOffset;
-        BlueSlider.Value = s.BlueOffset;
-        BrightnessSlider.Value = s.Brightness;
-        ContrastSlider.Value = s.Contrast;
-        UpdateValueLabels(s);
-        CurvePreview.Update(s);
-        _isUpdating = false;
+        StopSliderAnimations();
 
-        WriteUiIntoSettings();
-        ApplyCurrentToHardware();
-        PulseValues();
+        _isUpdating = false; // Allow slider changes to propagate to hardware in real time
+
+        int completedCount = 0;
+        Action checkDone = () =>
+        {
+            completedCount++;
+            if (completedCount == 6)
+            {
+                PulseValues();
+                UpdateActivePresetHighlight();
+            }
+        };
+
+        AnimateSliderTo(GammaSlider, s.Master, checkDone);
+        AnimateSliderTo(RedSlider, s.RedOffset, checkDone);
+        AnimateSliderTo(GreenSlider, s.GreenOffset, checkDone);
+        AnimateSliderTo(BlueSlider, s.BlueOffset, checkDone);
+        AnimateSliderTo(BrightnessSlider, s.Brightness, checkDone);
+        AnimateSliderTo(ContrastSlider, s.Contrast, checkDone);
     }
 
     private void WriteUiIntoSettings()
@@ -319,6 +368,87 @@ public partial class MainWindow : Window
         scale.BeginAnimation(ScaleTransform.ScaleYProperty, anim);
     }
 
+    // Keeps the gamma readout glowing while the value is actively changing, then fades it.
+    private DispatcherTimer? _gammaGlowHold;
+    private bool _gammaGlowActive;
+
+    private void HoldGammaGlow()
+    {
+        _gammaGlowHold ??= CreateGammaGlowTimer();
+
+        if (!_gammaGlowActive)
+        {
+            _gammaGlowActive = true;
+            AnimateGammaGlow(blur: 14, opacity: 0.95, milliseconds: 80);
+        }
+
+        _gammaGlowHold.Stop();
+        _gammaGlowHold.Start();
+    }
+
+    private DispatcherTimer CreateGammaGlowTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            _gammaGlowActive = false;
+            AnimateGammaGlow(blur: 0, opacity: 0, milliseconds: 340);
+        };
+        return timer;
+    }
+
+    private void AnimateGammaGlow(double blur, double opacity, double milliseconds)
+    {
+        var dur = TimeSpan.FromMilliseconds(milliseconds);
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        GammaValueGlow.BeginAnimation(DropShadowEffect.BlurRadiusProperty,
+            new DoubleAnimation(blur, dur) { EasingFunction = ease });
+        GammaValueGlow.BeginAnimation(DropShadowEffect.OpacityProperty,
+            new DoubleAnimation(opacity, dur) { EasingFunction = ease });
+    }
+
+    // Lights up whichever preset button matches the current settings (if any).
+    private void UpdateActivePresetHighlight()
+    {
+        var current = GetActiveSettings();
+        string? activePreset = null;
+        foreach (var (button, name) in EnumeratePresetButtons())
+        {
+            bool active = _appSettings.Presets.TryGetValue(name, out var preset)
+                          && SettingsMatch(preset, current);
+            Controls.ToggleState.SetIsActive(button, active);
+            if (active) activePreset = name;
+        }
+        UpdateTrayTooltip(current, activePreset);
+    }
+
+    private void UpdateTrayTooltip(GammaSettings s, string? activePreset)
+    {
+        var label = activePreset != null ? $" · {activePreset}" : "";
+        TrayIcon.ToolTipText =
+            $"Gamma Adjuster — γ {s.Master.ToString("F2", CultureInfo.InvariantCulture)}{label}";
+    }
+
+    private IEnumerable<(Button Button, string Name)> EnumeratePresetButtons()
+    {
+        yield return (Preset1Button, SettingsStore.Preset1);
+        yield return (Preset2Button, SettingsStore.Preset2);
+        yield return (Preset3Button, SettingsStore.Preset3);
+        yield return (Preset4Button, SettingsStore.Preset4);
+    }
+
+    private static bool SettingsMatch(GammaSettings a, GammaSettings b)
+    {
+        const double eps = 0.005;
+        return Math.Abs(a.Master - b.Master) < eps
+               && Math.Abs(a.RedOffset - b.RedOffset) < eps
+               && Math.Abs(a.GreenOffset - b.GreenOffset) < eps
+               && Math.Abs(a.BlueOffset - b.BlueOffset) < eps
+               && Math.Abs(a.Brightness - b.Brightness) < eps
+               && Math.Abs(a.Contrast - b.Contrast) < eps;
+    }
+
     private static string FormatSigned(double v) => (v >= 0 ? "+" : "") + v.ToString("F2", CultureInfo.InvariantCulture);
 
     private void ScheduleSave()
@@ -335,6 +465,63 @@ public partial class MainWindow : Window
         if (MonitorComboBox.SelectedItem is DisplayMonitor m) PullSettingsIntoUi(m);
     }
 
+    private void IdentifyButton_Click(object sender, RoutedEventArgs e)
+    {
+        IdentifySelectedMonitor();
+    }
+
+    private void IdentifySelectedMonitor()
+    {
+        // Close any currently active identify windows first to avoid accumulation
+        foreach (var w in _activeIdentifyWindows)
+        {
+            try { w.Close(); } catch { }
+        }
+        _activeIdentifyWindows.Clear();
+
+        if (MonitorComboBox.SelectedItem is not DisplayMonitor selected) return;
+
+        if (selected.DeviceName == AllMonitorsKey)
+        {
+            int idx = 1;
+            foreach (var m in _monitors)
+            {
+                IdentifyMonitor(m, idx.ToString());
+                idx++;
+            }
+        }
+        else
+        {
+            int idx = _monitors.FindIndex(m => m.DeviceName == selected.DeviceName) + 1;
+            if (idx > 0)
+            {
+                IdentifyMonitor(selected, idx.ToString());
+            }
+        }
+    }
+
+    private void IdentifyMonitor(DisplayMonitor monitor, string number)
+    {
+        var rect = GammaManager.GetMonitorRect(monitor.DeviceName);
+        if (rect != Rect.Empty)
+        {
+            // Convert physical coordinates to WPF logical coordinates based on screen DPI
+            double scale = 1.0;
+            try
+            {
+                var dpi = VisualTreeHelper.GetDpi(this);
+                scale = dpi.DpiScaleX;
+            }
+            catch { }
+
+            var logicalRect = new Rect(rect.X / scale, rect.Y / scale, rect.Width / scale, rect.Height / scale);
+
+            var idWindow = new Controls.IdentifyWindow();
+            _activeIdentifyWindows.Add(idWindow);
+            idWindow.ShowNumber(number, logicalRect);
+        }
+    }
+
     private void GammaSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (_isUpdating)
@@ -347,6 +534,8 @@ public partial class MainWindow : Window
         UpdateValueLabels(s);
         CurvePreview.Update(s);
         ApplyCurrentToHardware();
+        HoldGammaGlow();
+        UpdateActivePresetHighlight();
         ScheduleSave();
     }
 
@@ -358,6 +547,7 @@ public partial class MainWindow : Window
         UpdateValueLabels(s);
         CurvePreview.Update(s);
         ApplyCurrentToHardware();
+        UpdateActivePresetHighlight();
         ScheduleSave();
     }
 
@@ -462,6 +652,7 @@ public partial class MainWindow : Window
 
         _appSettings.Presets[name] = current;
         SettingsStore.Save(_appSettings);
+        UpdateActivePresetHighlight();
     }
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -502,6 +693,16 @@ public partial class MainWindow : Window
     {
         _shuttingDown = true;
 
+        // Close OSD
+        _osdWindow?.Close();
+
+        // Close Identify overlays
+        foreach (var w in _activeIdentifyWindows)
+        {
+            try { w.Close(); } catch { }
+        }
+        _activeIdentifyWindows.Clear();
+
         // Reset hardware to neutral so the user doesn't get stuck with a tinted screen.
         var def = GammaSettings.Default();
         foreach (var m in _monitors)
@@ -521,7 +722,26 @@ public partial class MainWindow : Window
         Application.Current.Shutdown();
     }
 
-    private void ShowAndActivate()
+    private void ShowOsd(double val)
+    {
+        if (_osdWindow == null)
+        {
+            _osdWindow = new Controls.OsdWindow();
+        }
+        _osdWindow.ShowValue(val);
+    }
+
+    private void TrayPreset_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem item && item.Tag is string name)
+        {
+            if (!_appSettings.Presets.TryGetValue(name, out var preset)) return;
+            ApplySettingsToUi(preset.Clone());
+            ScheduleSave();
+        }
+    }
+
+    public void ShowAndActivate()
     {
         if (!IsVisible) Show();
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;

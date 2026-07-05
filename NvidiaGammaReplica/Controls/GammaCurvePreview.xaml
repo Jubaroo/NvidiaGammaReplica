@@ -3,14 +3,27 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              SnapsToDevicePixels="True"
              UseLayoutRounding="True">
-    <Border CornerRadius="4"
-            Background="#181818"
-            BorderBrush="#333333"
-            BorderThickness="1"
-            ClipToBounds="True">
-        <Grid>
-            <Rectangle x:Name="GradientStrip" Height="14" VerticalAlignment="Top" Margin="1"/>
-            <Canvas x:Name="CurveCanvas" Margin="0,16,0,0" Background="Transparent"/>
-        </Grid>
-    </Border>
+    <Grid>
+        <Border CornerRadius="4"
+                Background="#181818"
+                BorderBrush="#333333"
+                BorderThickness="1"
+                ClipToBounds="True">
+            <Grid>
+                <Rectangle x:Name="GradientStrip" Height="14" VerticalAlignment="Top" Margin="1"/>
+                <Canvas x:Name="CurveCanvas" Margin="0,16,0,0" Background="Transparent"/>
+            </Grid>
+        </Border>
+        <!-- Accent overlay that flashes when the curve is updated -->
+        <Border x:Name="FlashBorder"
+                CornerRadius="4"
+                BorderBrush="#76B900"
+                BorderThickness="1.5"
+                IsHitTestVisible="False"
+                Opacity="0">
+            <Border.Effect>
+                <DropShadowEffect Color="#76B900" BlurRadius="10" ShadowDepth="0" Opacity="0.8"/>
+            </Border.Effect>
+        </Border>
+    </Grid>
 </UserControl>

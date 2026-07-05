@@ -5,12 +5,12 @@
         xmlns:controls="clr-namespace:NvidiaGammaReplica.Controls"
         Title="Gamma Adjuster"
         Icon="icon.ico"
-        Height="660" Width="520"
-        Background="Transparent"
+        Height="700" Width="520"
+        Background="{DynamicResource BgBrush}"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         WindowStyle="None"
-        AllowsTransparency="True"
+        AllowsTransparency="False"
         FontFamily="Segoe UI"
         TextOptions.TextFormattingMode="Display"
         UseLayoutRounding="True">
@@ -169,21 +169,89 @@
             </Setter>
         </Style>
 
-        <!-- Slider thumb (parametrized via Tag = brush key) -->
+        <!-- Slider thumb with a glowing halo that expands while dragging -->
         <Style x:Key="GammaThumb" TargetType="Thumb">
-            <Setter Property="Width" Value="16"/>
-            <Setter Property="Height" Value="16"/>
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
-                        <Grid>
-                            <Ellipse x:Name="Outer" Fill="{StaticResource AccentBrush}"/>
-                            <Ellipse Width="5" Height="5" Fill="#0A0A0A"/>
+                        <!-- Oversized grid so the halo isn't clipped -->
+                        <Grid Width="30" Height="30">
+                            <!-- Soft halo ring: hidden until hover/drag -->
+                            <Ellipse x:Name="Halo"
+                                     Width="30" Height="30"
+                                     Fill="{StaticResource AccentBrush}"
+                                     Opacity="0"
+                                     RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform>
+                                    <ScaleTransform x:Name="HaloScale" ScaleX="0.6" ScaleY="0.6"/>
+                                </Ellipse.RenderTransform>
+                            </Ellipse>
+                            <!-- The solid knob -->
+                            <Grid x:Name="Knob"
+                                  Width="16" Height="16"
+                                  RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="KnobScale" ScaleX="1" ScaleY="1"/>
+                                </Grid.RenderTransform>
+                                <Ellipse x:Name="Outer" Fill="{StaticResource AccentBrush}">
+                                    <Ellipse.Effect>
+                                        <DropShadowEffect x:Name="Glow" Color="#76B900"
+                                                          BlurRadius="0" ShadowDepth="0" Opacity="0"/>
+                                    </Ellipse.Effect>
+                                </Ellipse>
+                                <Ellipse Width="5" Height="5" Fill="#0A0A0A" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Outer" Property="Fill" Value="#8FD400"/>
+                                <Setter TargetName="Halo" Property="Opacity" Value="0.14"/>
+                            </Trigger>
+                            <!-- Grab: knob grows, halo blooms, glow ignites -->
+                            <Trigger Property="IsDragging" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="KnobScale" Storyboard.TargetProperty="ScaleX"
+                                                             To="1.35" Duration="0:0:0.12"/>
+                                            <DoubleAnimation Storyboard.TargetName="KnobScale" Storyboard.TargetProperty="ScaleY"
+                                                             To="1.35" Duration="0:0:0.12"/>
+                                            <DoubleAnimation Storyboard.TargetName="HaloScale" Storyboard.TargetProperty="ScaleX"
+                                                             To="1.0" Duration="0:0:0.18"/>
+                                            <DoubleAnimation Storyboard.TargetName="HaloScale" Storyboard.TargetProperty="ScaleY"
+                                                             To="1.0" Duration="0:0:0.18"/>
+                                            <DoubleAnimation Storyboard.TargetName="Halo" Storyboard.TargetProperty="Opacity"
+                                                             To="0.22" Duration="0:0:0.18"/>
+                                            <DoubleAnimation Storyboard.TargetName="Glow" Storyboard.TargetProperty="BlurRadius"
+                                                             To="16" Duration="0:0:0.18"/>
+                                            <DoubleAnimation Storyboard.TargetName="Glow" Storyboard.TargetProperty="Opacity"
+                                                             To="0.9" Duration="0:0:0.18"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="KnobScale" Storyboard.TargetProperty="ScaleX"
+                                                             To="1" Duration="0:0:0.22"/>
+                                            <DoubleAnimation Storyboard.TargetName="KnobScale" Storyboard.TargetProperty="ScaleY"
+                                                             To="1" Duration="0:0:0.22"/>
+                                            <DoubleAnimation Storyboard.TargetName="HaloScale" Storyboard.TargetProperty="ScaleX"
+                                                             To="0.6" Duration="0:0:0.25"/>
+                                            <DoubleAnimation Storyboard.TargetName="HaloScale" Storyboard.TargetProperty="ScaleY"
+                                                             To="0.6" Duration="0:0:0.25"/>
+                                            <DoubleAnimation Storyboard.TargetName="Halo" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.25"/>
+                                            <DoubleAnimation Storyboard.TargetName="Glow" Storyboard.TargetProperty="BlurRadius"
+                                                             To="0" Duration="0:0:0.25"/>
+                                            <DoubleAnimation Storyboard.TargetName="Glow" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.25"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -193,7 +261,7 @@
 
         <!-- Master gamma slider (filled track) -->
         <Style x:Key="GammaSliderStyle" TargetType="Slider">
-            <Setter Property="Height" Value="22"/>
+            <Setter Property="Height" Value="32"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Slider">
@@ -227,7 +295,13 @@
                                         <RepeatButton.Template>
                                             <ControlTemplate TargetType="RepeatButton">
                                                 <Border Background="{StaticResource AccentBrush}"
-                                                        Height="4" CornerRadius="2"/>
+                                                        Height="4" CornerRadius="2"
+                                                        Margin="0,0,-7,0">
+                                                    <Border.Effect>
+                                                        <DropShadowEffect Color="#76B900" BlurRadius="8"
+                                                                          ShadowDepth="0" Opacity="0.55"/>
+                                                    </Border.Effect>
+                                                </Border>
                                             </ControlTemplate>
                                         </RepeatButton.Template>
                                     </RepeatButton>
@@ -253,7 +327,9 @@
 
         <!-- Bipolar slider (centered zero, no fill) for offsets/brightness/contrast -->
         <Style x:Key="BipolarSliderStyle" TargetType="Slider">
-            <Setter Property="Height" Value="22"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="SmallChange" Value="0.01"/>
+            <Setter Property="LargeChange" Value="0.05"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Slider">
@@ -357,6 +433,50 @@
             </Setter>
         </Style>
 
+        <!-- Preset button: SubtleButton + an "active" accent glow when its preset is applied -->
+        <Style x:Key="PresetButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushSub}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="10,6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource SurfaceHover}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentDim}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                            <!-- Highlighted when this is the preset currently in effect -->
+                            <Trigger Property="controls:ToggleState.IsActive" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter TargetName="Bd" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="#76B900" BlurRadius="10" ShadowDepth="0" Opacity="0.6"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SectionLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
             <Setter Property="FontSize" Value="10"/>
@@ -411,14 +531,7 @@
         </Style>
     </Window.Resources>
 
-    <Border Background="{StaticResource BgBrush}"
-            BorderBrush="{StaticResource BorderBrushSub}"
-            BorderThickness="1"
-            CornerRadius="6"
-            Margin="12">
-        <Border.Effect>
-            <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="0" Opacity="0.55"/>
-        </Border.Effect>
+    <Grid>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -477,10 +590,24 @@
                 <!-- Monitor selector -->
                 <StackPanel Grid.Row="1" Margin="0,0,0,14">
                     <TextBlock Style="{StaticResource SectionLabel}" Text="DISPLAY" Margin="0,0,0,5"/>
-                    <ComboBox x:Name="MonitorComboBox"
-                              Style="{StaticResource ModernComboBox}"
-                              DisplayMemberPath="DisplayName"
-                              SelectionChanged="MonitorComboBox_SelectionChanged"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ComboBox Grid.Column="0" x:Name="MonitorComboBox"
+                                  Style="{StaticResource ModernComboBox}"
+                                  DisplayMemberPath="DisplayName"
+                                  SelectionChanged="MonitorComboBox_SelectionChanged"/>
+                        <Button Grid.Column="1" x:Name="IdentifyButton"
+                                Style="{StaticResource SubtleButton}"
+                                Content="Identify"
+                                Margin="8,0,0,0"
+                                Height="34"
+                                Padding="12,0"
+                                Click="IdentifyButton_Click"
+                                ToolTip="Flash the monitor number in the center of the display"/>
+                    </Grid>
                 </StackPanel>
 
                 <!-- Presets row -->
@@ -495,14 +622,18 @@
                                    Text="Right-click a preset to overwrite with current settings"/>
                     </Grid>
                     <UniformGrid Rows="1" Columns="4" HorizontalAlignment="Stretch">
-                        <Button x:Name="PresetDayButton" Style="{StaticResource SubtleButton}" Content="Day"
-                                Margin="0,0,4,0" Click="PresetButton_Click" MouseRightButtonUp="PresetButton_RightClick" Tag="Day"/>
-                        <Button x:Name="PresetNightButton" Style="{StaticResource SubtleButton}" Content="Night"
-                                Margin="2,0,2,0" Click="PresetButton_Click" MouseRightButtonUp="PresetButton_RightClick" Tag="Night"/>
-                        <Button x:Name="PresetGamingButton" Style="{StaticResource SubtleButton}" Content="Gaming"
-                                Margin="2,0,2,0" Click="PresetButton_Click" MouseRightButtonUp="PresetButton_RightClick" Tag="Gaming"/>
-                        <Button x:Name="PresetMovieButton" Style="{StaticResource SubtleButton}" Content="Movie"
-                                Margin="4,0,0,0" Click="PresetButton_Click" MouseRightButtonUp="PresetButton_RightClick" Tag="Movie"/>
+                        <Button x:Name="Preset1Button" Style="{StaticResource PresetButton}" Content="Preset 1"
+                                Margin="0,0,4,0" Click="PresetButton_Click" MouseRightButtonUp="PresetButton_RightClick" Tag="Preset 1"
+                                ToolTip="Left-click: apply · Right-click: save current settings here"/>
+                        <Button x:Name="Preset2Button" Style="{StaticResource PresetButton}" Content="Preset 2"
+                                Margin="2,0,2,0" Click="PresetButton_Click" MouseRightButtonUp="PresetButton_RightClick" Tag="Preset 2"
+                                ToolTip="Left-click: apply · Right-click: save current settings here"/>
+                        <Button x:Name="Preset3Button" Style="{StaticResource PresetButton}" Content="Preset 3"
+                                Margin="2,0,2,0" Click="PresetButton_Click" MouseRightButtonUp="PresetButton_RightClick" Tag="Preset 3"
+                                ToolTip="Left-click: apply · Right-click: save current settings here"/>
+                        <Button x:Name="Preset4Button" Style="{StaticResource PresetButton}" Content="Preset 4"
+                                Margin="4,0,0,0" Click="PresetButton_Click" MouseRightButtonUp="PresetButton_RightClick" Tag="Preset 4"
+                                ToolTip="Left-click: apply · Right-click: save current settings here"/>
                     </UniformGrid>
                 </StackPanel>
 
@@ -521,13 +652,19 @@
                             <TextBox.RenderTransform>
                                 <ScaleTransform ScaleX="1" ScaleY="1"/>
                             </TextBox.RenderTransform>
+                            <TextBox.Effect>
+                                <DropShadowEffect x:Name="GammaValueGlow" Color="#76B900"
+                                                  BlurRadius="0" ShadowDepth="0" Opacity="0"/>
+                            </TextBox.Effect>
                         </TextBox>
                     </Grid>
                     <Slider x:Name="GammaSlider"
                             Style="{StaticResource GammaSliderStyle}"
                             Minimum="0.3" Maximum="2.8" Value="1.0"
+                            SmallChange="0.01" LargeChange="0.1"
                             IsMoveToPointEnabled="True"
-                            ValueChanged="GammaSlider_ValueChanged"/>
+                            ValueChanged="GammaSlider_ValueChanged"
+                            ToolTip="Drag or use arrow keys · Ctrl+Alt+↑ / ↓ adjusts globally · Ctrl+Alt+0 resets"/>
                     <Grid Margin="0,3,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -685,6 +822,13 @@
                         <MenuItem Header="Show" Click="TrayShow_Click"/>
                         <MenuItem Header="Reset All Monitors" Click="TrayResetAll_Click"/>
                         <Separator/>
+                        <MenuItem Header="Presets">
+                            <MenuItem Header="Preset 1" Click="TrayPreset_Click" Tag="Preset 1"/>
+                            <MenuItem Header="Preset 2" Click="TrayPreset_Click" Tag="Preset 2"/>
+                            <MenuItem Header="Preset 3" Click="TrayPreset_Click" Tag="Preset 3"/>
+                            <MenuItem Header="Preset 4" Click="TrayPreset_Click" Tag="Preset 4"/>
+                        </MenuItem>
+                        <Separator/>
                         <MenuItem x:Name="StartWithWindowsMenuItem"
                                   Header="Start with Windows"
                                   IsCheckable="True"
@@ -695,5 +839,5 @@
                 </tb:TaskbarIcon.ContextMenu>
             </tb:TaskbarIcon>
         </Grid>
-    </Border>
+    </Grid>
 </Window>

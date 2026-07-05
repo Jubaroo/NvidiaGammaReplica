@@ -21,12 +21,12 @@ public static class SettingsStore
 
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
-    public const string PresetDay = "Day";
-    public const string PresetNight = "Night";
-    public const string PresetGaming = "Gaming";
-    public const string PresetMovie = "Movie";
+    public const string Preset1 = "Preset 1";
+    public const string Preset2 = "Preset 2";
+    public const string Preset3 = "Preset 3";
+    public const string Preset4 = "Preset 4";
 
-    public static readonly string[] BuiltInPresetNames = { PresetDay, PresetNight, PresetGaming, PresetMovie };
+    public static readonly string[] BuiltInPresetNames = { Preset1, Preset2, Preset3, Preset4 };
 
     public static AppSettings Load()
     {
@@ -38,6 +38,16 @@ public static class SettingsStore
                 var loaded = JsonSerializer.Deserialize<AppSettings>(json);
                 if (loaded != null)
                 {
+                    // Clean up any non-standard preset keys (like legacy "Day", "Night", etc.)
+                    var keys = new List<string>(loaded.Presets.Keys);
+                    foreach (var key in keys)
+                    {
+                        if (!BuiltInPresetNames.Contains(key) && !key.StartsWith("Custom "))
+                        {
+                            loaded.Presets.Remove(key);
+                        }
+                    }
+
                     SeedDefaultPresets(loaded);
                     return loaded;
                 }
@@ -69,22 +79,26 @@ public static class SettingsStore
 
     private static void SeedDefaultPresets(AppSettings s)
     {
-        s.Presets.TryAdd(PresetDay, new GammaSettings
+        // Preset 1 — neutral / daytime baseline.
+        s.Presets.TryAdd(Preset1, new GammaSettings
         {
             Master = 1.0
         });
-        s.Presets.TryAdd(PresetNight, new GammaSettings
+        // Preset 2 — warm, dimmed night profile (less blue light).
+        s.Presets.TryAdd(Preset2, new GammaSettings
         {
             Master = 0.85,
             Brightness = -0.05,
             BlueOffset = -0.15
         });
-        s.Presets.TryAdd(PresetGaming, new GammaSettings
+        // Preset 3 — punchy, high-contrast gaming profile.
+        s.Presets.TryAdd(Preset3, new GammaSettings
         {
             Master = 1.15,
             Contrast = 0.10
         });
-        s.Presets.TryAdd(PresetMovie, new GammaSettings
+        // Preset 4 — cinematic, slightly darker with mild contrast.
+        s.Presets.TryAdd(Preset4, new GammaSettings
         {
             Master = 1.05,
             Brightness = -0.03,

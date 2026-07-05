@@ -1,7 +1,10 @@
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using NvidiaGammaReplica.Models;
 
 namespace NvidiaGammaReplica.Controls;
@@ -10,17 +13,58 @@ public partial class GammaCurvePreview : UserControl
 {
     private GammaSettings _settings = GammaSettings.Default();
 
+    // Keeps the flash lit while values keep changing, then fades once they settle.
+    private readonly DispatcherTimer _flashHold;
+    private bool _flashActive;
+
     public GammaCurvePreview()
     {
         InitializeComponent();
         SizeChanged += (_, _) => Redraw();
         Loaded += (_, _) => Redraw();
+
+        _flashHold = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(140) };
+        _flashHold.Tick += (_, _) =>
+        {
+            _flashHold.Stop();
+            FadeFlashOut();
+        };
     }
 
     public void Update(GammaSettings settings)
     {
         _settings = settings.Clone();
         Redraw();
+        Flash();
+    }
+
+    /// <summary>
+    /// Lights the accent border immediately, and holds it lit for as long as
+    /// updates keep arriving (e.g. during a slider drag), fading shortly after.
+    /// </summary>
+    private void Flash()
+    {
+        if (!IsLoaded) return;
+
+        if (!_flashActive)
+        {
+            _flashActive = true;
+            var fadeIn = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(60));
+            FlashBorder.BeginAnimation(OpacityProperty, fadeIn);
+        }
+
+        _flashHold.Stop();
+        _flashHold.Start();
+    }
+
+    private void FadeFlashOut()
+    {
+        _flashActive = false;
+        var fadeOut = new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(320))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        FlashBorder.BeginAnimation(OpacityProperty, fadeOut);
     }
 
     private void Redraw()

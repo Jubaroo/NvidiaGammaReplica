@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Windows;
 using NvidiaGammaReplica.Models;
 
 namespace NvidiaGammaReplica;
@@ -42,6 +43,56 @@ public static class GammaManager
     [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern bool EnumDisplayDevices(string? lpDevice, uint iDevNum, ref DISPLAY_DEVICE lpDisplayDevice, uint dwFlags);
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct MONITORINFOEX
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public int dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string szDevice;
+    }
+
+    private delegate bool MonitorEnumDelegate(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, MonitorEnumDelegate lpfnEnum, IntPtr dwData);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFOEX lpmi);
+
+    public static Rect GetMonitorRect(string deviceName)
+    {
+        var bounds = Rect.Empty;
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData) =>
+        {
+            var mi = new MONITORINFOEX();
+            mi.cbSize = Marshal.SizeOf(mi);
+            if (GetMonitorInfo(hMonitor, ref mi))
+            {
+                if (string.Equals(mi.szDevice, deviceName, StringComparison.OrdinalIgnoreCase))
+                {
+                    bounds = new Rect(mi.rcMonitor.Left, mi.rcMonitor.Top,
+                                      mi.rcMonitor.Right - mi.rcMonitor.Left,
+                                      mi.rcMonitor.Bottom - mi.rcMonitor.Top);
+                    return false; // Stop enumeration
+                }
+            }
+            return true; // Continue enumeration
+        }, IntPtr.Zero);
+        return bounds;
+    }
+
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
     private struct DISPLAY_DEVICE
     {
@@ -75,6 +126,7 @@ public static class GammaManager
         var monitors = new List<DisplayMonitor>();
         var d = new DISPLAY_DEVICE { cb = Marshal.SizeOf<DISPLAY_DEVICE>() };
 
+        uint monitorIndex = 0;
         for (uint i = 0; EnumDisplayDevices(null, i, ref d, 0); i++)
         {
             bool attached = (d.StateFlags & DisplayDeviceStateFlags.AttachedToDesktop) != 0;
@@ -85,11 +137,12 @@ public static class GammaManager
                 continue;
             }
 
+            monitorIndex++;
             bool isPrimary = (d.StateFlags & DisplayDeviceStateFlags.PrimaryDevice) != 0;
             monitors.Add(new DisplayMonitor
             {
                 DeviceName = d.DeviceName,
-                DisplayName = d.DeviceName.Replace(@"\\.\", ""),
+                DisplayName = $"Monitor {monitorIndex}" + (isPrimary ? " (Primary)" : ""),
                 IsPrimary = isPrimary
             });
 
